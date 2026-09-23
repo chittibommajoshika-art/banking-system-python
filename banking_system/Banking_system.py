@@ -1,177 +1,257 @@
 import random
+import json
 from datetime import datetime
 
-accounts = {}
-
-print("================================")
-print("       BANKING SYSTEM")
-print("================================")
+# File where account details will be stored
+DATA_FILE = "accounts.json"
 
 
-# 1. CREATE ACCOUNT
-def create_account():
-    print("\n===== CREATE ACCOUNT =====")
+# Load existing accounts from the file
+def load_accounts():
+    try:
+        with open(DATA_FILE, "r") as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return {}
 
-    name = input("Enter your name: ")
-    phone = input("Enter your phone number: ")
-    pin = input("Create a 4-digit PIN: ")
 
-    account_number = random.randint(100000, 999999)
+# Save accounts to the file
+def save_accounts(accounts):
+    with open(DATA_FILE, "w") as file:
+        json.dump(accounts, file, indent=4)
 
+
+# Generate a unique 8-digit account number
+def generate_account_number(accounts):
+    while True:
+        account_number = str(random.randint(10000000, 99999999))
+
+        if account_number not in accounts:
+            return account_number
+
+
+# Create a new bank account
+def create_account(accounts):
+    print("\n========== CREATE ACCOUNT ==========")
+
+    name = input("Enter your name: ").strip()
+
+    while name == "":
+        print("Name cannot be empty.")
+        name = input("Enter your name: ").strip()
+
+    phone = input("Enter your phone number: ").strip()
+
+    while not phone.isdigit() or len(phone) != 10:
+        print("Please enter a valid 10-digit phone number.")
+        phone = input("Enter your phone number: ").strip()
+
+    pin = input("Create a 4-digit PIN: ").strip()
+
+    while not pin.isdigit() or len(pin) != 4:
+        print("PIN must contain exactly 4 digits.")
+        pin = input("Create a 4-digit PIN: ").strip()
+
+    confirm_pin = input("Confirm your PIN: ").strip()
+
+    while pin != confirm_pin:
+        print("PINs do not match.")
+        pin = input("Create a 4-digit PIN: ").strip()
+        confirm_pin = input("Confirm your PIN: ").strip()
+
+    # Generate account number
+    account_number = generate_account_number(accounts)
+
+    # Store account information
     accounts[account_number] = {
         "name": name,
         "phone": phone,
         "pin": pin,
-        "balance": 0,
+        "balance": 0.0,
         "transactions": []
     }
 
+    save_accounts(accounts)
+
     print("\nAccount created successfully!")
-    print("Your Account Number:", account_number)
+    print("Your Account Number is:", account_number)
+    print("Please remember your Account Number and PIN.")
 
 
-# LOGIN
-def login():
-    print("\n===== LOGIN =====")
+# Login to an existing account
+def login(accounts):
+    print("\n========== LOGIN ==========")
 
-    account_number = int(input("Enter your account number: "))
-    pin = input("Enter your PIN: ")
+    account_number = input("Enter Account Number: ").strip()
+    pin = input("Enter PIN: ").strip()
 
-    if account_number in accounts:
-        if accounts[account_number]["pin"] == pin:
-            print("\nLogin successful!")
-            print("Welcome,", accounts[account_number]["name"])
-            return account_number
-        else:
-            print("\nIncorrect PIN!")
-    else:
-        print("\nAccount not found!")
+    if account_number not in accounts:
+        print("Account not found.")
+        return None
 
-    return None
+    if accounts[account_number]["pin"] != pin:
+        print("Incorrect PIN.")
+        return None
 
+    print("\nLogin successful!")
+    print("Welcome,", accounts[account_number]["name"])
 
-# 1. CHECK BALANCE
-def check_balance(account_number):
-    print("\n===== ACCOUNT BALANCE =====")
-
-    balance = accounts[account_number]["balance"]
-
-    print("Current Balance: ₹", balance)
+    return account_number
 
 
-# 2. DEPOSIT
-def deposit(account_number):
-    print("\n===== DEPOSIT MONEY =====")
+# Check account balance
+def check_balance(account):
+    print("\n========== ACCOUNT BALANCE ==========")
+    print("Account Holder :", account["name"])
+    print("Current Balance: ₹{:.2f}".format(account["balance"]))
 
-    amount = float(input("Enter amount to deposit: "))
 
-    if amount <= 0:
-        print("Please enter a valid amount.")
-        return
-
-    accounts[account_number]["balance"] += amount
-
-    transaction_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-
+# Add a transaction to transaction history
+def add_transaction(account, transaction_type, amount, details):
     transaction = {
-        "type": "Deposit",
+        "type": transaction_type,
         "amount": amount,
-        "date_time": transaction_time
+        "details": details,
+        "date": datetime.now().strftime("%d-%m-%Y %I:%M:%S %p")
     }
 
-    accounts[account_number]["transactions"].append(transaction)
-
-    print("\nDeposit successful!")
-    print("Deposited Amount: ₹", amount)
-    print("Current Balance: ₹", accounts[account_number]["balance"])
+    account["transactions"].append(transaction)
 
 
-# 3. WITHDRAW
-def withdraw(account_number):
-    print("\n===== WITHDRAW MONEY =====")
+# Deposit money
+def deposit_money(account):
+    print("\n========== DEPOSIT MONEY ==========")
 
-    amount = float(input("Enter amount to withdraw: "))
+    try:
+        amount = float(input("Enter amount to deposit: ₹"))
 
-    if amount <= 0:
+        if amount <= 0:
+            print("Amount must be greater than zero.")
+            return
+
+        account["balance"] += amount
+
+        add_transaction(
+            account,
+            "Deposit",
+            amount,
+            "Money deposited"
+        )
+
+        print("\nDeposit successful!")
+        print("Amount Deposited: ₹{:.2f}".format(amount))
+        print("New Balance: ₹{:.2f}".format(account["balance"]))
+
+    except ValueError:
         print("Please enter a valid amount.")
+
+
+# Withdraw money
+def withdraw_money(account):
+    print("\n========== WITHDRAW MONEY ==========")
+
+    try:
+        amount = float(input("Enter amount to withdraw: ₹"))
+
+        if amount <= 0:
+            print("Amount must be greater than zero.")
+            return
+
+        # Check balance before withdrawing
+        if amount > account["balance"]:
+            print("Insufficient balance.")
+            print(
+                "Available Balance: ₹{:.2f}".format(
+                    account["balance"]
+                )
+            )
+            return
+
+        account["balance"] -= amount
+
+        add_transaction(
+            account,
+            "Withdrawal",
+            amount,
+            "Money withdrawn"
+        )
+
+        print("\nWithdrawal successful!")
+        print("Amount Withdrawn: ₹{:.2f}".format(amount))
+        print("Remaining Balance: ₹{:.2f}".format(account["balance"]))
+
+    except ValueError:
+        print("Please enter a valid amount.")
+
+
+# Transfer money from one account to another
+def transfer_money(accounts, sender_account_number):
+    print("\n========== TRANSFER MONEY ==========")
+
+    receiver_account_number = input(
+        "Enter receiver Account Number: "
+    ).strip()
+
+    # Check whether receiver exists
+    if receiver_account_number not in accounts:
+        print("Receiver account not found.")
         return
 
-    if amount > accounts[account_number]["balance"]:
-        print("\nInsufficient balance!")
+    # Prevent transferring to the same account
+    if receiver_account_number == sender_account_number:
+        print("You cannot transfer money to your own account.")
         return
 
-    accounts[account_number]["balance"] -= amount
+    try:
+        amount = float(input("Enter amount to transfer: ₹"))
 
-    transaction_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+        if amount <= 0:
+            print("Amount must be greater than zero.")
+            return
 
-    transaction = {
-        "type": "Withdrawal",
-        "amount": amount,
-        "date_time": transaction_time
-    }
+        sender = accounts[sender_account_number]
+        receiver = accounts[receiver_account_number]
 
-    accounts[account_number]["transactions"].append(transaction)
+        # Check sender's balance
+        if amount > sender["balance"]:
+            print("Insufficient balance.")
+            return
 
-    print("\nWithdrawal successful!")
-    print("Withdrawn Amount: ₹", amount)
-    print("Current Balance: ₹", accounts[account_number]["balance"])
+        # Deduct money from sender
+        sender["balance"] -= amount
 
+        # Add money to receiver
+        receiver["balance"] += amount
 
-# 4. TRANSFER
-def transfer(account_number):
-    print("\n===== TRANSFER MONEY =====")
+        # Add transaction to sender's history
+        add_transaction(
+            sender,
+            "Transfer",
+            amount,
+            "Transferred to Account " + receiver_account_number
+        )
 
-    receiver = int(input("Enter receiver account number: "))
-    amount = float(input("Enter amount to transfer: "))
+        # Add transaction to receiver's history
+        add_transaction(
+            receiver,
+            "Transfer Received",
+            amount,
+            "Received from Account " + sender_account_number
+        )
 
-    if receiver not in accounts:
-        print("\nReceiver account not found!")
-        return
+        print("\nTransfer successful!")
+        print("Amount Transferred: ₹{:.2f}".format(amount))
+        print("Your New Balance: ₹{:.2f}".format(sender["balance"]))
 
-    if receiver == account_number:
-        print("\nYou cannot transfer money to your own account!")
-        return
-
-    if amount <= 0:
-        print("\nPlease enter a valid amount.")
-        return
-
-    if amount > accounts[account_number]["balance"]:
-        print("\nInsufficient balance!")
-        return
-
-    accounts[account_number]["balance"] -= amount
-    accounts[receiver]["balance"] += amount
-
-    transaction_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-
-    sender_transaction = {
-        "type": "Transfer",
-        "amount": amount,
-        "to": receiver,
-        "date_time": transaction_time
-    }
-
-    receiver_transaction = {
-        "type": "Received",
-        "amount": amount,
-        "from": account_number,
-        "date_time": transaction_time
-    }
-
-    accounts[account_number]["transactions"].append(sender_transaction)
-    accounts[receiver]["transactions"].append(receiver_transaction)
-
-    print("\nTransfer successful!")
-    print("Transferred Amount: ₹", amount)
-    print("Current Balance: ₹", accounts[account_number]["balance"])
+    except ValueError:
+        print("Please enter a valid amount.")
 
 
-# 5. TRANSACTION HISTORY
-def transaction_history(account_number):
-    print("\n===== TRANSACTION HISTORY =====")
+# Display transaction history
+def transaction_history(account):
+    print("\n========== TRANSACTION HISTORY ==========")
 
-    transactions = accounts[account_number]["transactions"]
+    transactions = account["transactions"]
 
     if len(transactions) == 0:
         print("No transactions found.")
@@ -179,91 +259,141 @@ def transaction_history(account_number):
 
     for i, transaction in enumerate(transactions, start=1):
         print("\nTransaction", i)
-        print("Type:", transaction["type"])
-        print("Amount: ₹", transaction["amount"])
-
-        if "to" in transaction:
-            print("To Account:", transaction["to"])
-
-        if "from" in transaction:
-            print("From Account:", transaction["from"])
-
-        print("Date & Time:", transaction["date_time"])
+        print("Type    :", transaction["type"])
+        print("Amount  : ₹{:.2f}".format(transaction["amount"]))
+        print("Details :", transaction["details"])
+        print("Date    :", transaction["date"])
 
 
-# 6. CHANGE PIN
-def change_pin(account_number):
-    print("\n===== CHANGE PIN =====")
+# Change account PIN
+def change_pin(account):
+    print("\n========== CHANGE PIN ==========")
 
-    old_pin = input("Enter your old PIN: ")
+    old_pin = input("Enter old PIN: ").strip()
 
-    if old_pin != accounts[account_number]["pin"]:
-        print("\nIncorrect old PIN!")
+    if old_pin != account["pin"]:
+        print("Incorrect old PIN.")
         return
 
-    new_pin = input("Enter your new PIN: ")
-    confirm_pin = input("Confirm your new PIN: ")
+    new_pin = input("Enter new 4-digit PIN: ").strip()
+
+    while not new_pin.isdigit() or len(new_pin) != 4:
+        print("PIN must contain exactly 4 digits.")
+        new_pin = input("Enter new 4-digit PIN: ").strip()
+
+    confirm_pin = input("Confirm new PIN: ").strip()
 
     if new_pin != confirm_pin:
-        print("\nPINs do not match!")
+        print("PINs do not match.")
         return
 
-    if len(new_pin) != 4 or not new_pin.isdigit():
-        print("\nPIN must contain exactly 4 digits!")
-        return
+    account["pin"] = new_pin
 
-    accounts[account_number]["pin"] = new_pin
-
-    print("\nPIN changed successfully!")
+    print("PIN changed successfully.")
 
 
-# ACCOUNT MENU
-def account_menu(account_number):
+# Account menu after successful login
+def account_menu(accounts, account_number):
 
     while True:
+        account = accounts[account_number]
 
-        print("\n========== ACCOUNT MENU ==========")
+        print("\n")
+        print("======================================")
+        print("           ACCOUNT MENU")
+        print("======================================")
         print("1. Check Balance")
-        print("2. Deposit")
-        print("3. Withdraw")
-        print("4. Transfer")
+        print("2. Deposit Money")
+        print("3. Withdraw Money")
+        print("4. Transfer Money")
         print("5. Transaction History")
         print("6. Change PIN")
         print("7. Logout")
-        print("==================================")
+        print("======================================")
 
-        choice = input("Enter your choice: ")
+        choice = input("Enter your choice: ").strip()
 
         if choice == "1":
-            check_balance(account_number)
+
+            check_balance(account)
 
         elif choice == "2":
-            deposit(account_number)
+
+            deposit_money(account)
+            save_accounts(accounts)
 
         elif choice == "3":
-            withdraw(account_number)
+
+            withdraw_money(account)
+            save_accounts(accounts)
 
         elif choice == "4":
-            transfer(account_number)
+
+            transfer_money(accounts, account_number)
+            save_accounts(accounts)
 
         elif choice == "5":
-            transaction_history(account_number)
+
+            transaction_history(account)
 
         elif choice == "6":
-            change_pin(account_number)
+
+            change_pin(account)
+            save_accounts(accounts)
 
         elif choice == "7":
-            print("\nLogged out successfully!")
+
+            print("\nLogged out successfully.")
+            print("Returning to main menu...")
             break
 
         else:
-            print("\nInvalid choice! Please select 1-7.")
+
+            print("Invalid choice.")
+            print("Please enter a number from 1 to 7.")
 
 
-# MAIN PROGRAM
-create_account()
+# Main menu
+def main():
+    accounts = load_accounts()
 
-logged_in_account = login()
+    while True:
 
-if logged_in_account is not None:
-    account_menu(logged_in_account)
+        print("\n")
+        print("======================================")
+        print("          PYTHON BANKING SYSTEM")
+        print("======================================")
+        print("1. Create Account")
+        print("2. Login")
+        print("3. Exit")
+        print("======================================")
+
+        choice = input("Enter your choice: ").strip()
+
+        if choice == "1":
+
+            create_account(accounts)
+
+        elif choice == "2":
+
+            account_number = login(accounts)
+
+            if account_number is not None:
+                account_menu(accounts, account_number)
+
+        elif choice == "3":
+
+            print("\nThank you for using the Banking System!")
+            print("Goodbye!")
+            break
+
+        else:
+
+            print("Invalid choice.")
+            print("Please enter 1, 2, or 3.")
+
+
+# Start the program
+if __name__ == "__main__":
+    main()
+   
